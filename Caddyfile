@@ -7,7 +7,7 @@
 
     handle {
         basic_auth {
-            {$BASIC_AUTH_USER} {$AUTH_HASH}
+            {env.BASIC_AUTH_USER} {env.AUTH_HASH}
         }
 
         reverse_proxy 127.0.0.1:8000
