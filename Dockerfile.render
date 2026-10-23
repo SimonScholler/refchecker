@@ -4,11 +4,28 @@ FROM ghcr.io/markrussinovich/refchecker:latest
 
 USER root
 
+# Copy Caddy into the RefChecker image
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY start-render.sh /start-render.sh
 
-RUN chmod 755 /start-render.sh
+# The official Caddy binary has CAP_NET_BIND_SERVICE set.
+# Render does not permit that capability, which causes:
+#   caddy: Operation not permitted
+# We only listen on Render's unprivileged $PORT, so remove it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libcap2-bin \
+    && setcap -r /usr/bin/caddy \
+    && chmod 755 /usr/bin/caddy /start-render.sh \
+    && rm -rf /var/lib/apt/lists/*
+
+# RefChecker's Web UI currently uses its hard-coded default model for
+# server-environment providers rather than REFCHECKER_LLM_MODEL.
+RUN python -c 'from pathlib import Path; p=Path("/app/backend/main.py"); s=p.read_text(); old="        \"model\": DEFAULT_EXTRACTION_MODELS[provider],\n"; new="        \"model\": os.environ.get(\"REFCHECKER_LLM_MODEL\") if provider == _normalize_llm_provider_name(os.environ.get(\"REFCHECKER_LLM_PROVIDER\")) and os.environ.get(\"REFCHECKER_LLM_MODEL\") else DEFAULT_EXTRACTION_MODELS[provider],\n"; assert old in s, "RefChecker main.py changed; model patch no longer applies"; p.write_text(s.replace(old, new, 1))'
+
+# Keep deterministic hallucination pre-screening, but disable the
+# subsequent LLM/web-search phase unless explicitly enabled.
+RUN python -c 'from pathlib import Path; p=Path("/app/backend/refchecker_wrapper.py"); s=p.read_text(); old="                if needs_async:\n"; new="                if needs_async and os.getenv(\"REFCHECKER_ENABLE_HALLUCINATION_LLM\", \"false\").lower() in (\"1\", \"true\", \"yes\", \"on\"):\n"; assert old in s, "RefChecker wrapper changed; hallucination patch no longer applies"; p.write_text(s.replace(old, new, 1))'
 
 USER refchecker
 
