@@ -1,0 +1,15 @@
+FROM caddy:2-alpine AS caddy
+
+FROM ghcr.io/markrussinovich/refchecker:latest
+
+USER root
+
+COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY start-render.sh /start-render.sh
+
+RUN chmod 755 /start-render.sh
+
+USER refchecker
+
+ENTRYPOINT ["/start-render.sh"]
