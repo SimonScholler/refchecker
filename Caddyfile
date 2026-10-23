@@ -1,0 +1,15 @@
+:{$PORT} {
+    @health path /api/health
+
+    handle @health {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle {
+        basic_auth {
+            {$BASIC_AUTH_USER} {$AUTH_HASH}
+        }
+
+        reverse_proxy 127.0.0.1:8000
+    }
+}
